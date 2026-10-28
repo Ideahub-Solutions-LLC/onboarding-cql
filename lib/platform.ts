@@ -1,8 +1,5 @@
-import { env as cfEnv } from "cloudflare:workers";
-
-// One storage/config surface for both targets:
-//  - Cloudflare Workers: D1 (DB) + R2 (BUCKET) bindings.
-//  - Vercel / Node: Turso (libSQL) via DATABASE_URL; uploads live in the same database.
+// SQLite/libSQL storage. Local development uses file:.data/cql.sqlite; hosted
+// environments use a persistent libSQL URL.
 export type Row = Record<string, any>;
 export interface Stmt {
   bind(...v: any[]): Stmt;
@@ -23,12 +20,15 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS secrets (application_id text PRIMARY KEY NOT NULL, ciphertext text NOT NULL, updated_at text NOT NULL)",
   "CREATE TABLE IF NOT EXISTS settings (id text PRIMARY KEY NOT NULL, value text NOT NULL)",
   "CREATE TABLE IF NOT EXISTS blobs (key text PRIMARY KEY NOT NULL, data blob NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS users (email text PRIMARY KEY NOT NULL, password_hash text NOT NULL, created_at text NOT NULL, updated_at text NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS audit_events (id text PRIMARY KEY NOT NULL, actor_email text NOT NULL, action text NOT NULL, target_type text NOT NULL, target_id text, metadata text NOT NULL DEFAULT '{}', created_at text NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS audit_events_created_at_idx ON audit_events(created_at)",
 ];
 
-const proc = (globalThis as any).process?.env ?? {};
-/** Runtime setting: Cloudflare binding/var first, then process.env (Vercel/Node). */
+const proc = process.env;
+/** Runtime setting from the Node environment. */
 export function setting(name: string): string | undefined {
-  const v = (cfEnv as any)?.[name] ?? proc[name];
+  const v = proc[name];
   return typeof v === "string" && v.trim() ? v : undefined;
 }
 
@@ -60,14 +60,10 @@ async function libsqlDb(): Promise<Db | null> {
 }
 
 export async function getDatabase(): Promise<Db | null> {
-  const d1 = (cfEnv as any)?.DB;
-  if (d1) return d1 as Db;
   return libsqlDb();
 }
 
 export async function getBucket(): Promise<Bucket | null> {
-  const r2 = (cfEnv as any)?.BUCKET;
-  if (r2) return r2 as Bucket;
   const db = await libsqlDb();
   if (!db) return null;
   return {

@@ -1,7 +1,7 @@
 'use client';
 import {PricingCatalog} from './pricing-page';
 import React,{createContext,useContext} from 'react';
-import {UploadCloud,FileText,Trash2,Check,Info,ArrowUpRight} from 'lucide-react';
+import {UploadCloud,FileText,Trash2,Check,Info} from 'lucide-react';
 export const FormContext=createContext<any>(null);
 export function Field({name,label,hint,placeholder,type='text',options,wide=false,rows,required=false}:any){const {data,set}=useContext(FormContext);return <label className={'field '+(wide?'wide':'')}><span>{label}{required&&<b className="required">*</b>}</span>{options?<select value={data[name]||''} onChange={e=>set(name,e.target.value)}><option value="">Select an option</option>{options.map((o:string)=><option key={o}>{o}</option>)}</select>:rows?<textarea rows={rows} value={data[name]||''} placeholder={placeholder} maxLength={20000} onChange={e=>set(name,e.target.value)}/>:<input type={type} value={data[name]||''} placeholder={placeholder} maxLength={2000} onChange={e=>set(name,e.target.value)}/>} {hint&&<small>{hint}</small>}</label>}
 export function CheckField({name,children}:any){const {data,set}=useContext(FormContext);return <label className="check-field"><input type="checkbox" checked={!!data[name]} onChange={e=>set(name,e.target.checked)}/><span>{children}</span></label>}

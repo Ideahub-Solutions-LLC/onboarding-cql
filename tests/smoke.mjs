@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import {authHeaders,base} from './auth-helper.mjs';
-async function request(path,{user='local_seedy',email='seedy@sites.test',body,method,origin=base}={}){const h={};if(user)Object.assign(h,await authHeaders(user,email));if(origin)h.Origin=origin;if(body&&!(body instanceof FormData))h['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{headers:h,method:method||(body?'POST':'GET'),body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
+async function request(path,{user='local_owner',email=process.env.TEST_OWNER_EMAIL||'admin@corequantumleads.com',body,method,origin=base}={}){const h={};if(user)Object.assign(h,await authHeaders(user,email));if(origin)h.Origin=origin;if(body&&!(body instanceof FormData))h['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{headers:h,method:method||(body?'POST':'GET'),body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
 let checks=0;function check(ok,msg){assert.ok(ok,msg);checks++;console.log('PASS '+msg);}
 check((await request('session',{user:null})).status===401,'anonymous access denied');
 check((await request('applications',{body:{},origin:'https://untrusted.example'})).status===403,'cross-origin writes denied');
 const session=(await request('session')).data;check(session.admin===true,'owner can administer');
+check(session.signIn==='password','session reports password authentication');
 const client={user:'synthetic_client',email:'synthetic-client@example.test'};check((await request('session',client)).data.admin===false,'client has no team privileges');
-const a=(await request('applications',{...client,body:{data:{legalName:'SYNTHETIC QA CLIENT',password:'must-not-save'}}})).data;
+check((await request('applications',{...client,body:{data:{}}})).status===403,'client cannot create an uninvited application');
+const a=(await request('applications',{body:{assignedEmail:client.email,initialPassword:'Synthetic-client-pass-1!',data:{legalName:'SYNTHETIC QA CLIENT',password:'must-not-save'}}})).data;
 check(a.id&&a.data.password===undefined,'new draft saved without secrets in answer payload');
 check((await request('applications/'+a.id,{user:'unrelated',email:'other@example.test'})).status===403,'unrelated client cannot read application');
 check((await request('applications/'+a.id+'/team',{...client,body:{status:'launched'},method:'PUT'})).status===403,'client cannot update team checklist');

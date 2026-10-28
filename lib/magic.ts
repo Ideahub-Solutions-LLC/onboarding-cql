@@ -1,4 +1,4 @@
-// Stateless signed tokens for email magic-link sign-in (HMAC-SHA256, WebCrypto only).
+// Stateless signed session cookie tokens (HMAC-SHA256, WebCrypto only).
 const enc = new TextEncoder();
 const b64u = (b: ArrayBuffer | Uint8Array) => {
   const u = b instanceof Uint8Array ? b : new Uint8Array(b);
@@ -12,7 +12,7 @@ async function key(secret: string) {
   return crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
 }
 
-export type TokenKind = "login" | "session";
+export type TokenKind = "session";
 
 export async function signToken(secret: string, kind: TokenKind, email: string, ttlSeconds: number, now = Date.now()) {
   const body = b64u(enc.encode(JSON.stringify({ k: kind, e: email.toLowerCase(), x: Math.floor(now / 1000) + ttlSeconds })));
@@ -41,5 +41,4 @@ export async function verifyToken(
 }
 
 export const SESSION_COOKIE = "cql_session";
-export const LOGIN_TTL = 15 * 60;
 export const SESSION_TTL = 7 * 24 * 60 * 60;

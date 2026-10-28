@@ -1,145 +1,74 @@
-# CQL On-boarding System
+# CQL Onboarding
 
-A private, persistent client onboarding app for Core Quantum Leads.
+A private client onboarding application for Core Quantum Leads.
 
-## Included
-- Eight-step client intake, beginning with signup. Clients complete and save each step to unlock the next. Draft saving, required-field checks, and client-specific applications are included.
-- A2P preparation, optional verification uploads, domain/email, phone and calendar preferences, contacts, follow-up SOP builder, optional AI receptionist, and pricing acknowledgment.
-- D1-backed records and private R2 attachments, with authorization on each API operation.
-- Domain password vault using AES-GCM. VAULT_KEY is a 32-byte base64 runtime secret, kept out of source and form exports. Delegated domain access is offered first.
-- Team workspace with application states, internal notes, file downloads, versioned rate snapshots, and a launch checklist.
-- Editable logo, brand color, support address, staff allowlist, signup options, and usage menu.
-- Add, edit, hide, reorder, or delete signup options without rebuilding. Each option has a name, description, badge, button text, and HTTPS destination.
-- CSV price imports with a preview and a choice to replace the menu or update matching services. Downloadable PDF, Excel, and CSV price-list documents can be uploaded and replaced separately.
+## Stack
 
-## Operating the app
-Owners are configured, never self-assigned: the OWNER_EMAILS setting lists the admin emails, and nobody is an owner until it is set. Owners may add team emails in Brand & settings. Create each client application with the exact email they use to sign in, add that email to the Cloudflare Access policy so they can reach the app, and copy their application link. No invitation or other email is sent by this app.
+- Next.js and React
+- SQLite/libSQL through `@libsql/client`
+- Email/password authentication with a signed HTTP-only session cookie
+- No Cloudflare Access and no emailed magic links
 
-The client screen uses larger text, a visual STEP 1 → STEP 8 progress map, and a focused form. The left menu starts hidden and can be shown or hidden with the header button; this display preference is remembered on the device. Completed steps show checkmarks, upcoming steps show locks.
+## Run locally
 
-The client sequence is: 1. Create your account; 2. Your business; 3. Business verification; 4. Domain & email; 5. Phone & calendar; 6. Contacts & follow-up; 7. AI receptionist; 8. Review & submit. Clients open a signup link, return, and confirm completion. Existing account holders can use the existing-account option. Confirmation is a client declaration; the team verifies the account and payment status.
+Requires Node.js 22.13 or newer.
 
-Draft answers are saved using Save draft or Save & continue. Files upload immediately. Passwords use the separate Save securely action. Clients can edit drafts and applications marked Changes requested; the team manages the remainder.
-
-In Team settings → Accounts & access options, edit Signup options and click Save settings. Choose Add account option, enter any account name, paste the signup link, and add a description and features (one per line). Turn on Show to clients, then Save settings. This supports standard, free, and special-access accounts without fixed public labels or placeholders. Only published account options appear in Step 1. The supplied Enterprise example is not presented as a free-access offer.
-
-For prices, download the CSV template, edit it in Excel or Google Sheets, and export it as CSV. Its basic columns are service, description, rate, unit, category. Tiered exports also include startup_rate, business_rate, scale_rate, section, billing, and details. Import the exported CSV to preserve all tier rates and billing details. Category is Usage, Setup, or AI; leave rate blank for To be confirmed. Import, review, choose replace or update, apply to draft, then Save settings. You can also edit rows directly and export the current menu. PDF/Excel document uploads provide a download for clients; they do not populate the individual rates automatically. Uploading and applying drafts do not change client-visible prices until settings are saved.
-
-The supplied CQL customer schedule includes 35 services. Only customer rates are included; supplier costs, markup columns, and the original internal PDF are not distributed to clients. Scale is separate from Enterprise. Domains have an inconsistent unit in the supplied schedule; the AI subscription rows lack final customer prices. These and other unspecified rates remain Confirm with CQL. Voice AI is labeled engine-only; external model usage is not presented as free.
-
-Clients can browse Pricing & features, select a tier for comparison, and request features such as WhatsApp activation and call recording. Requests are saved to their application and become separate team activation checklist items. Selecting a feature or previewing a different tier never activates billing or changes the subscription.
-
-Submitted prices and signup choices are a snapshot. Past submissions retain the acknowledged rates and price-list file, even after updates. Blank rates explicitly require a quote. Signup links open the destinations configured by the team. This app does not process card payments, provision GHL sub-accounts, register A2P campaigns, publish client websites, import contacts into GHL, or activate automations. Those are explicit team checklist tasks. AI receptionist selections are setup instructions, not an active AI calling service.
-
-## Runtime
-Vinext / React on Cloudflare Workers; D1 binding DB; R2 binding BUCKET. Authentication is Cloudflare Access (email one-time PIN or any identity provider you enable); the Worker verifies the Access JWT on every request. Runtime secret: VAULT_KEY. Runtime variables: OWNER_EMAILS, CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD. Never rotate this key without a data migration for stored credentials.
-
-## Running locally (Git Bash)
-Requires Node.js 24 or newer and npm. Run these from the project root in Git Bash.
-
-```bash
-# 1. Install dependencies (keep package-lock.json)
+```powershell
 npm ci
-
-# 2. Verify: type-check and pure unit checks
-npx tsc --noEmit
-node tests/catalog.mjs
-node tests/pricing.mjs
-
-# 3. Build (generates dist/server/wrangler.json)
-npm run build
-
-# 4. Create the local database. Run ONCE, after the first build.
-#    Skip if .wrangler/state already has the tables.
-npx wrangler d1 execute DB --local --config dist/server/wrangler.json \
-  --persist-to .wrangler/state --file drizzle/0000_steady_shard.sql
-
-# 5. Start the dev server
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 and use the local preview sign-in (a synthetic identity such as `seedy@sites.test`). Stop the server with `Ctrl+C`. Never expose this dev server to real clients.
+Open <http://localhost:3000>.
 
-**Optional: password vault preview.** Generate a 32-byte base64 key and put it in a git-ignored `.dev.vars` file, then restart `npm run dev`:
+Local settings live in the git-ignored `.env.local` file. The configured local database is created automatically under `.data`; no migration command is needed for a new database.
 
-```bash
-echo "VAULT_KEY=$(openssl rand -base64 32)" > .dev.vars
+## Sign in and sign out
+
+Owners sign in using an email from `OWNER_EMAILS` and the `ADMIN_PASSWORD` value. The application signs a session cookie using `AUTH_SECRET`.
+
+The Sign out button always opens `/api/auth/logout`, which clears the cookie and returns to the sign-in page.
+
+Owners create a client workspace with:
+
+- Business name
+- Client email
+- Temporary password of at least 12 characters
+
+The client then signs in with that email and password. Passwords are stored only as PBKDF2 hashes in SQLite.
+
+## Environment settings
+
+```dotenv
+DATABASE_URL=file:.data/cql.sqlite
+AUTH_SECRET=replace-with-a-long-random-secret
+VAULT_KEY=replace-with-a-32-byte-base64-key
+OWNER_EMAILS=owner@example.com
+ADMIN_PASSWORD=replace-with-a-long-unique-password
 ```
 
-Use a different key in production, stored in your secret manager.
+`DATABASE_AUTH_TOKEN` is needed only when `DATABASE_URL` points to a hosted libSQL database.
 
-**Production-build preview and API tests** (localhost:8787 only, synthetic data):
+## Production
 
-```bash
+A local SQLite file requires a Node server with persistent disk. Vercel's filesystem is temporary, so a Vercel deployment must use a persistent hosted SQLite/libSQL URL for `DATABASE_URL`. Authentication remains the same email/password flow and does not use Cloudflare or Resend.
+
+Set the variables from `vercel.env.example`, redeploy, and verify:
+
+```text
+GET /api/health
+```
+
+It should return HTTP 200 with configuration and storage checks set to `true`.
+
+## Verification
+
+```powershell
+npm run lint
+npx tsc --noEmit
+npm test
 npm run build
-npm run db:init:test           # once; creates .wrangler/test-state
-npm run start:test             # http://127.0.0.1:8787 with synthetic identity + vault key
-# in a second Git Bash window:
-node tests/smoke.mjs
-node tests/catalog-api.mjs
-node tests/features-api.mjs
 ```
 
-**Troubleshooting: `npm error The operation was rejected by your operating system` (EPERM on `unlink`).** On Windows, `npm ci` deletes `node_modules` first and fails if a running dev server still has native files open (for example `lightningcss.win32-x64-msvc.node`). Stop the dev server with `Ctrl+C` in its terminal, or end it from Git Bash, then re-run `npm ci`:
+The full API suite can be run against a production-mode local server with `npm run test:vercel`.
 
-```bash
-# find what is listening on the dev port, then stop that PID
-netstat -ano | grep ':5173' | grep LISTENING
-taskkill //PID <pid> //F
-```
-
-Also close editors or antivirus scans that may be holding files in `node_modules`.
-
-`start:test` turns on `ALLOW_TEST_HEADERS`, which accepts forged identity headers from localhost only. Never set it on a deployed Worker.
-
-## Deploying to Cloudflare (production)
-Authentication is handled by Cloudflare Access in front of the Worker; the app verifies the signed Access token (signature, issuer, audience, expiry) in `app/auth.ts` and ignores any identity header a caller supplies. If Access is not configured, a deployed Worker rejects every request. `workers.dev` and preview URLs are disabled in the generated config.
-
-1. **Create resources** (use separate names for staging):
-   ```bash
-   npx wrangler login
-   npx wrangler d1 create cql-onboarding-production    # note the database_id
-   npx wrangler r2 bucket create cql-onboarding-private
-   ```
-2. **Protect the hostname with Access.** In Cloudflare Zero Trust: Access > Applications > Add > Self-hosted, set the application domain to your onboarding hostname (for example `onboarding.corequantumleads.com`). Enable **One-time PIN** under Settings > Authentication, and add an Allow policy listing the emails that may sign in (owners, team, and each client). Copy the **Application Audience (AUD) tag** and your **team domain** (`yourteam.cloudflareaccess.com`).
-3. **Fill in settings.** `cp deploy.env.example .env.deploy` and complete it (D1 id, hostname, team domain, AUD, OWNER_EMAILS). `.env.deploy` is git-ignored.
-4. **Build, migrate, set the vault key, deploy:**
-   ```bash
-   npm ci
-   npm run build
-   npm run deploy:config       # writes dist/server/wrangler.deploy.json (re-run after every build)
-   npm run deploy:migrate      # applies drizzle/ migrations to the remote D1 database
-   openssl rand -base64 32     # generate once; store it in your secret manager
-   npm run deploy:secret       # paste the key when prompted (VAULT_KEY)
-   npm run deploy              # rebuilds, regenerates config, and deploys
-   ```
-5. **Verify on the real HTTPS hostname** with owner, team, Client A and Client B accounts (see the acceptance list in DEPLOYMENT.txt). Signing out uses `/cdn-cgi/access/logout`.
-
-Keep the vault key stable and backed up: rotating it makes stored credentials unreadable. `npm test` runs the pure checks, including the Access token verifier (`tests/access-jwt.mjs`).
-
-## Deploying to Vercel
-The same code also runs on Vercel (`next build`). There the database is Turso (libSQL), uploads are stored in that same database, and sign-in is an emailed magic link (Resend). Cloudflare is unaffected.
-
-1. **Create the database:** `turso db create cql-onboarding`, then note its URL (`turso db show cql-onboarding --url`) and create a token (`turso db tokens create cql-onboarding`). Tables are created automatically on first request.
-2. **Import the repo** in Vercel (Framework: Next.js). `vercel.json` already sets the install and build commands.
-3. **Add the environment variables** from `vercel.env.example` (DATABASE_URL, DATABASE_AUTH_TOKEN, AUTH_SECRET, VAULT_KEY, OWNER_EMAILS, RESEND_API_KEY, MAIL_FROM).
-4. **Deploy**, then add the domain `onboarding.corequantumleads.com` under Project > Domains and create the DNS record Vercel shows.
-5. **Sign in** at the site with an owner email; a link is emailed (valid 15 minutes, session lasts 7 days). Clients sign in the same way using the exact email on their application.
-
-Notes: a single upload is limited by Vercel to about 4.5 MB (Cloudflare allows 10 MB). Without RESEND_API_KEY a production deployment refuses to send links, and outside production the link is returned on screen for local testing.
-
-Run the Vercel build locally (Git Bash): set DATABASE_URL to a local file and run it:
-
-```bash
-export DATABASE_URL="file:.data/local.db" AUTH_SECRET="$(openssl rand -base64 48)" OWNER_EMAILS="you@example.com" VAULT_KEY="$(openssl rand -base64 32)"
-npm run dev:vercel            # http://localhost:3000, sign-in link is shown on screen (no email needed)
-# or the production build:
-npm run build:vercel && npm run start:vercel
-# API tests against it (second window, same AUTH_SECRET / OWNER_EMAILS=seedy@sites.test):
-TEST_BASE=http://127.0.0.1:3000 npm run test:vercel
-```
-
-## Development
-Use the Sites skill helpers for install, build, source sync, and publishing. npm run dev serves the portable preview. npm run db:generate produces schema migrations. The production preview uses npm start.
-
-tests/catalog.mjs and tests/pricing.mjs check CSV parsing, catalog validation, exact customer rates, tier separation, and billing distinctions. tests/features-api.mjs checks request persistence, rate snapshots, and activation checklist prerequisites. tests/smoke.mjs and tests/catalog-api.mjs target only 127.0.0.1:8787 with synthetic records and identities. They expect the local database owner local_seedy and a synthetic VAULT_KEY in the local preview. Checks cover access control, CSRF, client isolation, files, encrypted credentials, sequential steps, settings conflicts, price-list access, version snapshots, submission locking, and launch prerequisites. Do not point them at production.
+Operational notes are in `docs/SECURITY.md`, `docs/MONITORING.md`, and `docs/DISASTER_RECOVERY.md`.

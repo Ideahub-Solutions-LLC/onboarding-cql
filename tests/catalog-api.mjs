@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {authHeaders,base} from './auth-helper.mjs';let checks=0;
-const admin={user:'local_seedy',email:'seedy@sites.test'},client={user:'catalog_client',email:'catalog-client@example.test'},other={user:'another_client',email:'other-catalog@example.test'};
+const admin={user:'local_owner',email:process.env.TEST_OWNER_EMAIL||'admin@corequantumleads.com'},client={user:'catalog_client',email:'catalog-client@example.test'},other={user:'another_client',email:'other-catalog@example.test'};
 async function api(path,{who=admin,method,body}={}){const headers={...(await authHeaders(who.user,who.email)),Origin:base};if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
 const check=(value,msg)=>{assert.ok(value,msg);checks++;console.log('PASS '+msg);};
 const original=(await api('session')).data.config;let config=structuredClone(original);let appId;
@@ -18,7 +18,7 @@ try{
  check((await api('price-lists/'+staged.data.id,{who:client})).status===403,'unsaved price-list upload is hidden from clients');
  const fd=new FormData();fd.append('file',new Blob(['test']),'client-price.csv');check((await api('price-lists',{who:client,body:fd})).status===403,'clients cannot upload team price lists');
  await save({priceList:staged.data});check((await api('price-lists/'+staged.data.id,{who:client})).status===200,'saved current price-list document downloadable by client');
- const created=(await api('applications',{who:client,body:{data:{}}})).data;appId=created.id;
+ const created=(await api('applications',{body:{assignedEmail:client.email,initialPassword:'Synthetic-client-pass-2!',data:{}}})).data;appId=created.id;
  check((await api('applications/'+appId,{who:client,method:'PUT',body:{data:{},step:1}})).status===409,'step 2 locked before signup completion');
  const d={flowVersion:2,completedSteps:['0'],signupId:offer.id,signupDone:true,alreadyHaveAccount:false};
  check((await api('applications/'+appId,{who:client,method:'PUT',body:{data:d,step:1}})).status===200,'completed signup unlocks step 2');

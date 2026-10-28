@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import {authHeaders,base} from './auth-helper.mjs';let count=0;
-const owner={id:'local_seedy',email:'seedy@sites.test'},client={id:'feature_test_client',email:'feature-test@example.test'};
+const owner={id:'local_owner',email:process.env.TEST_OWNER_EMAIL||'admin@corequantumleads.com'},client={id:'feature_test_client',email:'feature-test@example.test'};
 async function api(path,who=owner,body,method){const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers:{...(await authHeaders(who.id,who.email)),Origin:base,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};}
 const check=(name,value)=>{assert.ok(value,name);count++;console.log('PASS '+name);};
 const config=(await api('session')).data.config;
 check('client price catalog contains tiered customer prices',(await api('session',client)).data.config.fees.some(f=>f.name==='WhatsApp activation'&&f.rates.Business==='15.000000'));
 const requestedFeatures=['WhatsApp activation','Call recording'];
-const created=await api('applications',client,{data:{requestedFeatures}});check('client feature requests saved on application',created.status===201&&created.data.data.requestedFeatures.length===2);
+const created=await api('applications',owner,{assignedEmail:client.email,initialPassword:'Synthetic-client-pass-3!',data:{requestedFeatures}});check('team can create client application with feature requests',created.status===201&&created.data.data.requestedFeatures.length===2);
 const id=created.data.id;
 check('unknown feature requests are rejected',(await api('applications/'+id,client,{data:{requestedFeatures:['Unlisted feature']},step:0},'PUT')).status===400);
 check('team sees client activation requests',(await api('applications/'+id)).data.data.requestedFeatures.includes('Call recording'));

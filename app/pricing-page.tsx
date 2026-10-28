@@ -1,6 +1,6 @@
 'use client';
 import {useState} from 'react';
-import {ArrowLeft,ArrowRight,Check,CheckCircle2,MessageSquare,Phone,Mail,Sparkles,Layers,Info,Wallet,CalendarDays,FileText} from 'lucide-react';
+import {ArrowLeft,ArrowRight,CheckCircle2,MessageSquare,Phone,Mail,Sparkles,Layers,Info,Wallet,CalendarDays,FileText} from 'lucide-react';
 import {pricingTiers,pricingSections,displayRate} from '../lib/pricing';
 const icons:any={'Messaging':MessageSquare,'Phone & calls':Phone,'Email':Mail,'AI & automation':Sparkles,'Setup & subscriptions':CalendarDays,'Other':Layers};
 export function PricingCatalog({config,accountTier,requested=[],onToggle,compact=false,readOnly=false}:any){
