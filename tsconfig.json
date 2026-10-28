@@ -44,6 +44,7 @@
     ".vinext",
     ".wrangler",
     ".sites-runtime",
+    "scripts/vite",
     "outputs",
     "work"
   ]
