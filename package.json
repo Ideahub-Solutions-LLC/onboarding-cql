@@ -11,7 +11,14 @@
     "build": "node scripts/run-framework.mjs build",
     "start": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/state --ip 127.0.0.1 --inspector-port 0",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "deploy:config": "node --env-file-if-exists=.env.deploy scripts/make-deploy-config.mjs",
+    "deploy:migrate": "wrangler d1 migrations apply DB --remote --config dist/server/wrangler.deploy.json",
+    "deploy:secret": "wrangler secret put VAULT_KEY --config dist/server/wrangler.deploy.json",
+    "deploy": "npm run build && npm run deploy:config && wrangler deploy --config dist/server/wrangler.deploy.json",
+    "test": "node tests/catalog.mjs && node tests/pricing.mjs && node tests/access-jwt.mjs",
+    "db:init:test": "wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/test-state --file drizzle/0000_steady_shard.sql",
+    "start:test": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/test-state --ip 127.0.0.1 --port 8787 --inspector-port 0 --var ALLOW_TEST_HEADERS:1 --var OWNER_EMAILS:seedy@sites.test --var VAULT_KEY:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

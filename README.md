@@ -13,7 +13,7 @@ A private, persistent client onboarding app for Core Quantum Leads.
 - CSV price imports with a preview and a choice to replace the menu or update matching services. Downloadable PDF, Excel, and CSV price-list documents can be uploaded and replaced separately.
 
 ## Operating the app
-The Site starts owner-private. Its first signed-in visitor becomes its application owner. Open it as the Site owner before granting anyone access. The owner may add team emails in Brand & settings; those accounts also need Site access. Create each client application with the exact email they use to sign in, grant that client Site viewer access, and copy their application link. No invitation or other email is sent by this app.
+Owners are configured, never self-assigned: the OWNER_EMAILS setting lists the admin emails, and nobody is an owner until it is set. Owners may add team emails in Brand & settings. Create each client application with the exact email they use to sign in, add that email to the Cloudflare Access policy so they can reach the app, and copy their application link. No invitation or other email is sent by this app.
 
 The client screen uses larger text, a visual STEP 1 → STEP 8 progress map, and a focused form. The left menu starts hidden and can be shown or hidden with the header button; this display preference is remembered on the device. Completed steps show checkmarks, upcoming steps show locks.
 
@@ -32,7 +32,7 @@ Clients can browse Pricing & features, select a tier for comparison, and request
 Submitted prices and signup choices are a snapshot. Past submissions retain the acknowledged rates and price-list file, even after updates. Blank rates explicitly require a quote. Signup links open the destinations configured by the team. This app does not process card payments, provision GHL sub-accounts, register A2P campaigns, publish client websites, import contacts into GHL, or activate automations. Those are explicit team checklist tasks. AI receptionist selections are setup instructions, not an active AI calling service.
 
 ## Runtime
-Vinext / React on Cloudflare Workers; D1 binding DB; R2 binding BUCKET. Hosted authentication is provided by Sites. Runtime secret: VAULT_KEY. Never rotate this key without a data migration for stored credentials.
+Vinext / React on Cloudflare Workers; D1 binding DB; R2 binding BUCKET. Authentication is Cloudflare Access (email one-time PIN or any identity provider you enable); the Worker verifies the Access JWT on every request. Runtime secret: VAULT_KEY. Runtime variables: OWNER_EMAILS, CF_ACCESS_TEAM_DOMAIN, CF_ACCESS_AUD. Never rotate this key without a data migration for stored credentials.
 
 ## Running locally (Git Bash)
 Requires Node.js 24 or newer and npm. Run these from the project root in Git Bash.
@@ -72,7 +72,8 @@ Use a different key in production, stored in your secret manager.
 
 ```bash
 npm run build
-npm start                      # serves dist/ on http://127.0.0.1:8787
+npm run db:init:test           # once; creates .wrangler/test-state
+npm run start:test             # http://127.0.0.1:8787 with synthetic identity + vault key
 # in a second Git Bash window:
 node tests/smoke.mjs
 node tests/catalog-api.mjs
@@ -89,7 +90,32 @@ taskkill //PID <pid> //F
 
 Also close editors or antivirus scans that may be holding files in `node_modules`.
 
-Note: this build is not safe to publish on a public URL until the authentication adapter in `app/chatgpt-auth.ts` is replaced. See DEPLOYMENT.txt.
+`start:test` turns on `ALLOW_TEST_HEADERS`, which accepts forged identity headers from localhost only. Never set it on a deployed Worker.
+
+## Deploying to Cloudflare (production)
+Authentication is handled by Cloudflare Access in front of the Worker; the app verifies the signed Access token (signature, issuer, audience, expiry) in `app/auth.ts` and ignores any identity header a caller supplies. If Access is not configured, a deployed Worker rejects every request. `workers.dev` and preview URLs are disabled in the generated config.
+
+1. **Create resources** (use separate names for staging):
+   ```bash
+   npx wrangler login
+   npx wrangler d1 create cql-onboarding-production    # note the database_id
+   npx wrangler r2 bucket create cql-onboarding-private
+   ```
+2. **Protect the hostname with Access.** In Cloudflare Zero Trust: Access > Applications > Add > Self-hosted, set the application domain to your onboarding hostname (for example `onboarding.corequantumleads.com`). Enable **One-time PIN** under Settings > Authentication, and add an Allow policy listing the emails that may sign in (owners, team, and each client). Copy the **Application Audience (AUD) tag** and your **team domain** (`yourteam.cloudflareaccess.com`).
+3. **Fill in settings.** `cp deploy.env.example .env.deploy` and complete it (D1 id, hostname, team domain, AUD, OWNER_EMAILS). `.env.deploy` is git-ignored.
+4. **Build, migrate, set the vault key, deploy:**
+   ```bash
+   npm ci
+   npm run build
+   npm run deploy:config       # writes dist/server/wrangler.deploy.json (re-run after every build)
+   npm run deploy:migrate      # applies drizzle/ migrations to the remote D1 database
+   openssl rand -base64 32     # generate once; store it in your secret manager
+   npm run deploy:secret       # paste the key when prompted (VAULT_KEY)
+   npm run deploy              # rebuilds, regenerates config, and deploys
+   ```
+5. **Verify on the real HTTPS hostname** with owner, team, Client A and Client B accounts (see the acceptance list in DEPLOYMENT.txt). Signing out uses `/cdn-cgi/access/logout`.
+
+Keep the vault key stable and backed up: rotating it makes stored credentials unreadable. `npm test` runs the pure checks, including the Access token verifier (`tests/access-jwt.mjs`).
 
 ## Development
 Use the Sites skill helpers for install, build, source sync, and publishing. npm run dev serves the portable preview. npm run db:generate produces schema migrations. The production preview uses npm start.

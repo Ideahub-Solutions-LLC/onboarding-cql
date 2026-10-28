@@ -1,3 +1,5 @@
+NOTE (updated): Authentication now uses Cloudflare Access (see README.md > Deploying to Cloudflare). Sections below that describe replacing app/chatgpt-auth.ts, the first-visitor owner bootstrap, or Sites hosting are historical: the adapter is app/auth.ts and owners come from OWNER_EMAILS.
+
 CQL ON-BOARDING SYSTEM - DEVELOPER HANDOFF
 Release: 2026-10-27 / v3
 For Ludwig (ludwig@marketingmediacloud.com) and Emman (emmanuel@marketingmediacloud.com)

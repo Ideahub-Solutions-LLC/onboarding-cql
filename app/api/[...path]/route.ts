@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { getChatGPTUser } from '../../chatgpt-auth';
+import { getUser, ownerEmails } from '../../auth';
 import { defaultConfig, initialData, missingFields, taskNames, steps, stepErrors, unlockedStep } from '../../../lib/shared';
 import { applicationTasks } from '../../../lib/pricing';
 import { catalogConfig, validateSignupOptions, validateFees } from '../../../lib/catalog';
@@ -11,16 +11,12 @@ const clean=(d:any)=>{if(!d||typeof d!=='object'||Array.isArray(d))fail('Invalid
 const parseRow=(r:any)=>({...r,data:JSON.parse(r.data),checklist:JSON.parse(r.checklist||'{}'),pricingSnapshot:r.pricing_snapshot?JSON.parse(r.pricing_snapshot):null});
 function validate(d:any){const missing=missingFields(d);if(missing.length)fail('Please complete: '+missing.map(x=>x[2]).join(', '));for(const k of ['contactEmail','representativeEmail','calendarOwner'])if(!email(d[k]))fail('Enter a valid email address for '+k);if(!d.reviewAccuracy||!d.reviewUsage||!d.reviewAuthority||!d.signature)fail('Complete all acknowledgments and type your name.');if(d.importMode==='I have contacts to import'&&!d.importConsent)fail('Confirm the contact import permission acknowledgment.');if(d.brandType==='Registered business'&&d.country==='United States'&&!/^\d{2}-?\d{7}$/.test(d.taxId||''))fail('Enter a valid nine-digit EIN.');if(!/^\d{2}:\d{2}$/.test(d.startTime)||!/^\d{2}:\d{2}$/.test(d.endTime)||d.startTime>=d.endTime)fail('Business hours must have an end time after the start time.');if(!d.days?.length)fail('Choose at least one available day.');}
 async function handler(req:Request){try{
- const user=await getChatGPTUser();if(!user) return json({error:'Sign in to access your onboarding workspace.'},401);
+ const user=await getUser();if(!user) return json({error:'Sign in to access your onboarding workspace.'},401);
  const db=env.DB!;if(!db)return json({error:'Storage is not configured.'},503);
  if(req.method!=='GET'){const origin=req.headers.get('origin');if(!origin||origin!==new URL(req.url).origin)return json({error:'Invalid request origin.'},403);}
- const owner=await db.prepare('SELECT value FROM settings WHERE id = ?').bind('owner').first<{value:string}>();
- // Initial ownership is established only inside the newly created owner-private Site.
- if(!owner)await db.prepare('INSERT OR IGNORE INTO settings (id,value) VALUES (?,?)').bind('owner',user.userId).run();
- const ownerNow=owner||await db.prepare('SELECT value FROM settings WHERE id = ?').bind('owner').first<{value:string}>();
  const cfgRow=await db.prepare('SELECT value FROM settings WHERE id = ?').bind('config').first<{value:string}>();
  const config=catalogConfig({...defaultConfig,...catalogConfig(cfgRow?JSON.parse(cfgRow.value):{})});
- const admin=ownerNow?.value===user.userId||config.teamEmails.some((e:string)=>e.toLowerCase()===user.email?.toLowerCase());
+ const admin=ownerEmails().includes(user.email.toLowerCase())||config.teamEmails.some((e:string)=>e.toLowerCase()===user.email?.toLowerCase());
  const path=new URL(req.url).pathname.slice(5).split('/').filter(Boolean);const id=path[1];
  const validateRequests=(d:any,previous:any={})=>{if(d.requestedFeatures!==undefined&&(!Array.isArray(d.requestedFeatures)||d.requestedFeatures.some((name:string)=>!config.fees.some((f:any)=>f.name===name)&&!(previous.requestedFeatures||[]).includes(name))))fail('A requested feature is no longer on the menu. Review Pricing & features before saving.');};
  const visibleRow=(r:any)=>{const result=parseRow(r);if(!admin){delete result.notes;delete result.owner_id;}return result;};
@@ -80,4 +76,7 @@ async function handler(req:Request){try{
  if(path[0]==='files'&&id){const file:any=await db.prepare('SELECT * FROM attachments WHERE id=?').bind(id).first();if(!file)fail('File not found',404);const a=await getApp(file.application_id);if(req.method==='GET'){const object=await env.BUCKET!.get(file.object_key);if(!object)fail('File not found',404);return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename="${file.name}"`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}if(req.method==='DELETE'){assertEdit(a);await env.BUCKET!.delete(file.object_key);await db.prepare('DELETE FROM attachments WHERE id=?').bind(id).run();return json({deleted:true});}}
  return json({error:'Not found'},404);
  }catch(e:any){return json({error:e.status?e.message:'We couldn’t complete that request. Please try again.'},e.status||500);}}
-export const GET=handler,POST=handler,PUT=handler,DELETE=handler;
+// Responses sent before the body is read (401/403/validation) must still consume a small body,
+// otherwise the local proxy can stall or restart on the next request. Oversized bodies are not read.
+async function drained(req:Request){try{return await handler(req);}finally{if(req.body&&!req.bodyUsed&&Number(req.headers.get('content-length')||0)<=12*1024*1024)await req.arrayBuffer().catch(()=>{});}}
+export const GET=drained,POST=drained,PUT=drained,DELETE=drained;
