@@ -16,13 +16,18 @@
     "deploy:migrate": "wrangler d1 migrations apply DB --remote --config dist/server/wrangler.deploy.json",
     "deploy:secret": "wrangler secret put VAULT_KEY --config dist/server/wrangler.deploy.json",
     "deploy": "npm run build && npm run deploy:config && wrangler deploy --config dist/server/wrangler.deploy.json",
-    "test": "node tests/catalog.mjs && node tests/pricing.mjs && node tests/access-jwt.mjs",
+    "test": "node tests/catalog.mjs && node tests/pricing.mjs && node tests/access-jwt.mjs && node tests/magic-link.mjs",
     "db:init:test": "wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/test-state --file drizzle/0000_steady_shard.sql",
-    "start:test": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/test-state --ip 127.0.0.1 --port 8787 --inspector-port 0 --var ALLOW_TEST_HEADERS:1 --var OWNER_EMAILS:seedy@sites.test --var VAULT_KEY:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
+    "start:test": "node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js dev --config dist/server/wrangler.json --local --persist-to .wrangler/test-state --ip 127.0.0.1 --port 8787 --inspector-port 0 --var ALLOW_TEST_HEADERS:1 --var OWNER_EMAILS:seedy@sites.test --var VAULT_KEY:QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
+    "build:vercel": "node scripts/run-next.mjs build",
+    "start:vercel": "node scripts/run-next.mjs start",
+    "dev:vercel": "node scripts/run-next.mjs dev --port 3000",
+    "test:vercel": "node tests/smoke.mjs && node tests/catalog-api.mjs && node tests/features-api.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
     "@hookform/resolvers": "^5.7.1",
+    "@libsql/client": "^0.18.0",
     "@shadcn/react": "^0.3.0",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",

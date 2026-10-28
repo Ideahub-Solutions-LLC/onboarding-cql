@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-const base='http://127.0.0.1:8787';let checks=0;
+import {authHeaders,base} from './auth-helper.mjs';let checks=0;
 const admin={user:'local_seedy',email:'seedy@sites.test'},client={user:'catalog_client',email:'catalog-client@example.test'},other={user:'another_client',email:'other-catalog@example.test'};
-async function api(path,{who=admin,method,body}={}){const headers={'oai-authenticated-user-id':who.user,'oai-authenticated-user-email':who.email,Origin:base};if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
+async function api(path,{who=admin,method,body}={}){const headers={...(await authHeaders(who.user,who.email)),Origin:base};if(body&&!(body instanceof FormData))headers['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers,body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
 const check=(value,msg)=>{assert.ok(value,msg);checks++;console.log('PASS '+msg);};
 const original=(await api('session')).data.config;let config=structuredClone(original);let appId;
 async function save(changes){const r=await api('config',{method:'PUT',body:{...config,...changes}});check(r.status===200,'team settings save succeeds: '+JSON.stringify(r.status===200?'ok':r));config=r.data;return r;}

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-const base='http://127.0.0.1:8787';let count=0;
+import {authHeaders,base} from './auth-helper.mjs';let count=0;
 const owner={id:'local_seedy',email:'seedy@sites.test'},client={id:'feature_test_client',email:'feature-test@example.test'};
-async function api(path,who=owner,body,method){const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers:{'oai-authenticated-user-id':who.id,'oai-authenticated-user-email':who.email,Origin:base,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};}
+async function api(path,who=owner,body,method){const r=await fetch(base+'/api/'+path,{method:method||(body?'POST':'GET'),headers:{...(await authHeaders(who.id,who.email)),Origin:base,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json()};}
 const check=(name,value)=>{assert.ok(value,name);count++;console.log('PASS '+name);};
 const config=(await api('session')).data.config;
 check('client price catalog contains tiered customer prices',(await api('session',client)).data.config.fees.some(f=>f.name==='WhatsApp activation'&&f.rates.Business==='15.000000'));

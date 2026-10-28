@@ -117,6 +117,28 @@ Authentication is handled by Cloudflare Access in front of the Worker; the app v
 
 Keep the vault key stable and backed up: rotating it makes stored credentials unreadable. `npm test` runs the pure checks, including the Access token verifier (`tests/access-jwt.mjs`).
 
+## Deploying to Vercel
+The same code also runs on Vercel (`next build`). There the database is Turso (libSQL), uploads are stored in that same database, and sign-in is an emailed magic link (Resend). Cloudflare is unaffected.
+
+1. **Create the database:** `turso db create cql-onboarding`, then note its URL (`turso db show cql-onboarding --url`) and create a token (`turso db tokens create cql-onboarding`). Tables are created automatically on first request.
+2. **Import the repo** in Vercel (Framework: Next.js). `vercel.json` already sets the install and build commands.
+3. **Add the environment variables** from `vercel.env.example` (DATABASE_URL, DATABASE_AUTH_TOKEN, AUTH_SECRET, VAULT_KEY, OWNER_EMAILS, RESEND_API_KEY, MAIL_FROM).
+4. **Deploy**, then add the domain `onboarding.corequantumleads.com` under Project > Domains and create the DNS record Vercel shows.
+5. **Sign in** at the site with an owner email; a link is emailed (valid 15 minutes, session lasts 7 days). Clients sign in the same way using the exact email on their application.
+
+Notes: a single upload is limited by Vercel to about 4.5 MB (Cloudflare allows 10 MB). Without RESEND_API_KEY a production deployment refuses to send links, and outside production the link is returned on screen for local testing.
+
+Run the Vercel build locally (Git Bash): set DATABASE_URL to a local file and run it:
+
+```bash
+export DATABASE_URL="file:.data/local.db" AUTH_SECRET="$(openssl rand -base64 48)" OWNER_EMAILS="you@example.com" VAULT_KEY="$(openssl rand -base64 32)"
+npm run dev:vercel            # http://localhost:3000, sign-in link is shown on screen (no email needed)
+# or the production build:
+npm run build:vercel && npm run start:vercel
+# API tests against it (second window, same AUTH_SECRET / OWNER_EMAILS=seedy@sites.test):
+TEST_BASE=http://127.0.0.1:3000 npm run test:vercel
+```
+
 ## Development
 Use the Sites skill helpers for install, build, source sync, and publishing. npm run dev serves the portable preview. npm run db:generate produces schema migrations. The production preview uses npm start.
 

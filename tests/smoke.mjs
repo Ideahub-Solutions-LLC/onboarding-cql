@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-const base='http://127.0.0.1:8787';
-async function request(path,{user='local_seedy',email='seedy@sites.test',body,method,origin=base}={}){const h={};if(user){h['oai-authenticated-user-id']=user;h['oai-authenticated-user-email']=email;}if(origin)h.Origin=origin;if(body&&!(body instanceof FormData))h['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{headers:h,method:method||(body?'POST':'GET'),body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
+import {authHeaders,base} from './auth-helper.mjs';
+async function request(path,{user='local_seedy',email='seedy@sites.test',body,method,origin=base}={}){const h={};if(user)Object.assign(h,await authHeaders(user,email));if(origin)h.Origin=origin;if(body&&!(body instanceof FormData))h['Content-Type']='application/json';const r=await fetch(base+'/api/'+path,{headers:h,method:method||(body?'POST':'GET'),body:body instanceof FormData?body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text)}catch{data=text}return {status:r.status,data};}
 let checks=0;function check(ok,msg){assert.ok(ok,msg);checks++;console.log('PASS '+msg);}
 check((await request('session',{user:null})).status===401,'anonymous access denied');
 check((await request('applications',{body:{},origin:'https://untrusted.example'})).status===403,'cross-origin writes denied');
