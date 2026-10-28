@@ -1,0 +1,151 @@
+CQL ON-BOARDING SYSTEM - DEVELOPER HANDOFF
+Release: 2026-10-27 / v3
+For Ludwig (ludwig@marketingmediacloud.com) and Emman (emmanuel@marketingmediacloud.com)
+
+STATUS
+The onboarding application is implemented and locally verified. It is not yet live. The existing Sites registration is unpublished. This package is intended for your private GitHub repository and deployment work. A GitHub repository by itself does not host this server-backed app; GitHub Pages cannot run its API, D1 database, or private R2 uploads.
+
+WHAT IS IMPLEMENTED
+Eight prerequisite steps; save/resume; editable signup options and feature lists; A2P preparation; private uploads; a separate encrypted domain-password vault; phone/calendar preferences; contact-import and follow-up questionnaires; a generated draft SOP; optional AI receptionist questionnaire; customer-only tiered pricing; service activation requests; a team workspace with notes, application export, and launch checklist.
+
+WHAT YOUR TEAM STILL DOES
+GHL sub-account provisioning, signup/payment verification, A2P submission, DNS/email setup, buying/porting numbers, contact mapping/import into GHL, calendars, workflows, website publishing, AI receptionist activation, WhatsApp/recording activation, and billing configuration are team tasks. No GHL API, payment processor, SMTP, signup webhook, or automatic client invitation is connected. The checklist records progress; it does not execute these operations.
+
+1. DOWNLOAD AND OPEN
+Download CQL-Onboarding-Source-v3.zip from the shared Drive folder. Extract cql-onboarding and open that directory in your editor. Use Node.js 24 or newer (tested here with 26.7) and npm. Keep package-lock.json.
+
+  npm ci
+  npx tsc --noEmit
+  node tests/catalog.mjs
+  node tests/pricing.mjs
+  npm run build
+
+Initialize a fresh local database after the first build, once:
+
+  npx wrangler d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_steady_shard.sql
+
+Then start the browser preview:
+
+  npm run dev
+
+Open http://127.0.0.1:5173 and use the local preview sign-in. The preview uses synthetic local identity. Never expose this development server to real clients. The local data remains in .wrangler/state and is not included in the source package. If an existing local database already has the tables, do not re-run the initial CREATE TABLE script.
+
+For a local vault preview, configure a new 32-byte base64 VAULT_KEY in the local ignored .dev.vars location supported by your Wrangler/Vite setup. Use your secret manager to generate and store it. Production uses a different secret. Do not use the synthetic test value in production.
+
+2. CREATE YOUR PRIVATE GITHUB REPOSITORY
+Create a new empty private repository in your organization's GitHub account. No organization or repository URL has been selected or created in this handoff. From the extracted cql-onboarding directory, use your actual repository URL in place of the placeholder below:
+
+  git init
+  git add .
+  git commit -m "Add CQL onboarding system"
+  git branch -M main
+  git remote add origin <YOUR_PRIVATE_GITHUB_REPOSITORY_URL>
+  git push -u origin main
+
+Inspect git status and the staged file list before committing. The included .gitignore excludes node_modules, build output, .wrangler, .sites-runtime, .env files, .dev.vars files, and logs. Never commit client documents, test databases, vault keys, payment details, or the original internal pricing PDF. Invite Ludwig and Emman to the private repository using your normal organization process.
+
+3. PICK THE HOSTING PATH
+A. Keep the Sites hosting/authentication workflow. The current identity belongs to Marco's unpublished owner-private Site: appgprj_6ae12ec946048191bb89d4170e3f9a8c. Use the supported Sites tools to publish from Marco's account. The expected registered address is https://cql-client-launchpad.ideahub-9058.chatgpt.site, but it is NOT a working/live URL yet. Do not copy or reuse Marco's Sites identity in another account. Source publication was blocked by automatic approval review because approval for the exact external repository destination was still missing.
+
+B. Deploy independently to Cloudflare Workers, with D1 and private R2. This matches the existing runtime. Complete the authentication and ownership work below FIRST. Then deploy a separate staging environment and the final domain. This handoff does not provision your Cloudflare resources or deploy a production authentication adapter.
+
+4. AUTHENTICATION - REQUIRED FOR YOUR OWN URL
+app/chatgpt-auth.ts currently trusts identity headers supplied by the Sites hosting layer. Those headers are NOT sufficient authentication on a directly exposed Worker. Do not publish this build unchanged at a workers.dev or custom domain.
+
+Replace getChatGPTUser with your verified authentication provider or a properly validated Cloudflare Access identity. Validate signature, issuer, audience, expiry, and intended application; use a stable verified subject for userId and a verified email. Never trust a caller-supplied oai-authenticated-user-* header. Strip/ignore such headers at any public entry point. Replace the /signin-with-chatgpt UI link with the chosen login flow. Test sign-out and session expiry.
+
+The current first-authenticated-visitor ownership bootstrap is intended for an owner-private Sites deployment. For independent hosting, pre-provision the approved owner using the provider's stable user ID, or require an explicit owner allowlist before initialization. Do not let the first public visitor become administrator. Preserve per-application authorization and same-origin write checks. Team emails and client access are separate from authentication access policies.
+
+Source references:
+- Identity adapter: app/chatgpt-auth.ts
+- Login button and frontend session loading: app/page.tsx
+- Owner/team/client permissions and bootstrap: app/api/[...path]/route.ts
+- Worker entry: worker/index.ts
+
+5. CLOUDFLARE RESOURCES AND DEPLOYMENT
+Create separate staging and production resources. In your account:
+
+  npx wrangler login
+  npx wrangler d1 create cql-onboarding-production
+  npx wrangler r2 bucket create cql-onboarding-private
+
+Record the returned D1 database ID. Keep R2 private: no public bucket URL or public access. The API handles authorized downloads. Set bindings DB and BUCKET and the runtime secret VAULT_KEY. Use one stable production vault key, backed up in your secret manager. Rotating it without re-encrypting stored records makes old credentials unreadable.
+
+The Vite configuration currently contains local placeholder bindings. Build output at dist/server/wrangler.json is generated. Do not rely on editing it by hand as a permanent change: a later build overwrites it. For independent hosting, establish a source-controlled production configuration or deterministic configuration-generation step that points to the generated Worker entry and static assets, your actual D1 ID, and your R2 bucket. Preserve generated ES module rules and asset settings. Remove Sites-only hosting/auth assumptions from the independent deployment path. Keep the existing Sites path intact until the replacement is validated.
+
+Configure the D1 migrations_dir as the source drizzle directory relative to the selected Wrangler config. For a config under dist/server this path is ../../drizzle. Apply once per environment using the migration history mechanism:
+
+  npx wrangler d1 migrations list DB --remote --config <YOUR_PRODUCTION_CONFIG>
+  npx wrangler d1 migrations apply DB --remote --config <YOUR_PRODUCTION_CONFIG>
+  npx wrangler secret put VAULT_KEY --config <YOUR_PRODUCTION_CONFIG>
+
+After the auth adapter is complete, build and deploy to protected staging. Then run the acceptance checks below. Only after approval, deploy production:
+
+  npm run build
+  npx wrangler deploy --config <YOUR_PRODUCTION_CONFIG>
+
+Do not run these placeholder commands unchanged. Your production config must reference the current build output and the correct environment; review any migration before applying it. Configure the chosen domain in Workers & Pages > your Worker > Settings > Domains & Routes > Add > Custom Domain. The proposed onboarding.corequantumleads.com is a suggestion only, not a provisioned URL. Configure and test authentication on every alternate origin, including workers.dev/preview URLs, or disable those origins. Add GitHub CI only after manual staging succeeds: install, type-check, unit tests, build, controlled migrations, deploy. Store Cloudflare deployment credentials as protected CI secrets, never in source.
+
+6. DATABASE AND FILES
+D1 tables: settings, applications, attachments, secrets. The initial SQL is drizzle/0000_steady_shard.sql. settings contains owner and config. Application data includes step answers, completion markers, requestedFeatures, status, notes, checklist, and a submitted pricing snapshot. R2 objects are private uploads; attachments provides metadata and application ownership. secrets holds AES-GCM encrypted values, with application ID used as authenticated additional data.
+
+Uploads: up to 10 MB each, up to 30 per application. Accepted types: PDF, PNG/JPG/WebP, CSV/TSV, Excel, Word, and text. Uploaded price documents accept PDF, Excel, CSV. Prices are configuration data; a CSV import changes rate rows after preview and Save settings. A PDF/Excel document upload is a separate customer download and does not extract rates automatically.
+
+Back up D1, private R2, and the vault key as separate protected resources. Test restoring all three together. Define document retention and credential deletion procedures before real client use. Add an audit log, operational monitoring, rate limits, and file inspection appropriate to your deployment before accepting sensitive ID documents at scale. The included validation does not scan upload content for malware.
+
+7. LOCAL TESTS AND PRODUCTION ACCEPTANCE
+Pure checks:
+  node tests/catalog.mjs
+  node tests/pricing.mjs
+
+API tests target localhost:8787 ONLY, using synthetic local identities and a local owner of local_seedy. They must never be pointed at production. Start a production-build preview with a local synthetic vault key, then run:
+  node tests/smoke.mjs
+  node tests/catalog-api.mjs
+  node tests/features-api.mjs
+
+The suites cover 21 catalog, 13 pricing, 22 smoke/access, 24 catalog API, and 9 feature API checks (89 total). The local Wrangler proxy produced a follow-on 503 after an early rejection of a large unauthorized JSON body; that edge case needs staging verification. The normal permission test uses a small unauthorized change and still requires a 403. No retry-on-write was added.
+
+Before launch, verify with separate owner, team, Client A, and Client B accounts:
+- Anonymous and forged identity-header requests are denied.
+- Client A cannot read Client B's application, files, old price documents, notes, or vault.
+- Clients cannot change rates, staff access, launch status, or reveal stored passwords.
+- Step 1 must be completed before Step 2; later steps also enforce prerequisites.
+- Invalid signup URLs and stale pricing versions are rejected.
+- Add/edit/hide/delete signup options and features; test the actual signup destinations.
+- CSV import preview, tier rates, customer document download, and historical snapshots work.
+- Save/resume, file upload/download, vault encrypt/reveal/delete, and submission locking work.
+- Feature requests become launch tasks; unresolved tasks block Launched status.
+- Verify rejection of oversized/invalid requests does not break the next legitimate request.
+- Verify desktop and mobile screens, menu hide/show, and the production HTTPS origin.
+- Complete a fresh client onboarding and a real team-led GHL setup, including billing review.
+
+8. CUSTOMER CONFIGURATION BEFORE INVITES
+Confirm every signup URL and account feature list. Startup/Business defaults exist; Enterprise uses the example URL supplied by Marco and has no Scale mapping. Add free/special access using any desired account name and the final working URL. There is no fixed special-access block on the client screen. Keep Scale separate from Enterprise.
+
+Load customer-only rates. Do not upload the internal rebilling PDF for customer download. Some rates remain Confirm with CQL because the source lacks a final customer value or has an inconsistent unit. Voice AI rates are engine-only. WhatsApp activation is recurring and messaging is separate. Recording and storage have separate units. A request does not activate a service, charge a card, or change the client's subscription.
+
+9. SOURCE MAP
+app/page.tsx: wizard shell, team workspace, application detail, branding
+app/steps.tsx: business, A2P, domain, phone/calendar, contacts, AI, review
+app/signup-step.tsx: configurable signup options
+app/step-map.tsx: prerequisite step graphics
+app/pricing-page.tsx: customer pricing and requests
+app/catalog-settings.tsx + app/fee-editor.tsx: team account and price management
+app/api/[...path]/route.ts: storage, permissions, upload, vault, submit APIs
+lib/shared.ts: default configuration, required fields, SOP draft, baseline tasks
+lib/catalog.ts: account and rate validation, CSV import/export
+lib/pricing.ts: customer-only rates and activation task names
+app/globals.css: CQL colors, larger logo, responsive presentation
+
+10. OFFICIAL REFERENCES (checked 27 October 2026)
+Cloudflare custom domains:
+https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+Cloudflare Access JWT validation:
+https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/
+D1 migrations:
+https://developers.cloudflare.com/d1/reference/migrations/
+Wrangler configuration:
+https://developers.cloudflare.com/workers/wrangler/configuration/
+
+DELIVERY BACK TO MARCO
+Provide the private GitHub repository URL, staging URL, live production URL, owner login instructions, confirmed signup URLs, approved customer price menu, test results, and named responsibility for ongoing support. Keep production secrets outside this handoff folder.
