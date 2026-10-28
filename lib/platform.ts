@@ -34,10 +34,10 @@ export function setting(name: string): string | undefined {
 
 let nodeDb: Promise<Db> | undefined;
 async function libsqlDb(): Promise<Db | null> {
-  const url = setting("DATABASE_URL");
+  const url = setting("DATABASE_URL") ?? setting("TURSO_DATABASE_URL");
   if (!url) return null;
   nodeDb ??= (async () => {
-    const authToken = setting("DATABASE_AUTH_TOKEN");
+    const authToken = setting("DATABASE_AUTH_TOKEN") ?? setting("TURSO_AUTH_TOKEN");
     let client: any;
     if (url.startsWith("file:")) {
       // Local-only convenience; resolved at runtime so it is never bundled for Workers/Vercel.
